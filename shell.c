@@ -25,9 +25,10 @@
 	 int status, info;
 	 pid_t pid_wait;
 	 job_iterator iter = get_iterator(my_job_list);
+
 	 while(has_next(iter)){
 		 job * item = next(iter);
-		 pid_wait = waitpid(item->pgid, &status, WNOHANG | WCONTINUED);
+		 pid_wait = waitpid(item->pgid, &status, WNOHANG | WCONTINUED | WUNTRACED);
 		 if (pid_wait == item->pgid){	
 			 enum status status_res = analyze_status(status, &info);
 			 printf("Background pid: %d, command: %s, %s, info: %d\n", item->pgid, item->command, status_strings[status_res], info);
@@ -76,7 +77,51 @@
 		if (!strcmp(args[0], "exit")){
 			printf("Bye\n");
 			exit(EXIT_SUCCESS);
-		} else {
+		} 
+		else if (!strcmp(args[0], "cd")){
+			if (args[1] == NULL) {
+				char *home = getenv("HOME"); // Obtener el directorio home desde las variables de entorno
+				if (home == NULL) {
+					printf("Error: HOME not set\n");
+					return;
+				}
+				if (chdir(home) != 0) { // Cambiar al directorio HOME
+					perror("cd Error");
+				}
+			} else {
+				if (chdir(args[1]) != 0) { // Cambiar al directorio especificado
+					perror("cd Error");
+				}
+			}
+		}
+		else if (!strcmp(args[0], "jobs")){
+			print_list(my_job_list, print_item);
+		}
+		else if (!strcmp(args[0], "bg")){
+			job *item;
+			if (my_job_list->next == NULL){
+				printf("Error: job list is empty\n");
+				return;
+			}
+			if (args[1] == NULL){
+				item = get_item_bypos(my_job_list, 1);
+			}else {
+				int number = atoi(args[1]);
+				item = get_item_bypos(my_job_list, number);
+			}
+			kill(item->pgid, SIGCONT);
+			item->state = BACKGROUND;
+		}
+		else if (!strcmp(args[0], "fg")){
+			job *item;
+			if (args[1] == NULL){
+				item = get_item_bypos(my_job_list, 1);
+			}else {
+				int number = atoi(args[1]);
+				item = get_item_bypos(my_job_list, number);
+			}
+		}
+		else {
 			pid_fork = fork();
 			if (pid_fork > 0){
 				//Padre
