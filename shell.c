@@ -120,6 +120,7 @@
 				int number = atoi(args[1]);
 				item = get_item_bypos(my_job_list, number);
 			}
+			//Mandar killpg()
 		}
 		else {
 			pid_fork = fork();
