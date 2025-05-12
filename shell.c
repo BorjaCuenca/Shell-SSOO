@@ -83,7 +83,7 @@
 				char *home = getenv("HOME"); // Obtener el directorio home desde las variables de entorno
 				if (home == NULL) {
 					printf("Error: HOME not set\n");
-					return;
+					continue;
 				}
 				if (chdir(home) != 0) { // Cambiar al directorio HOME
 					perror("cd Error");
@@ -101,7 +101,7 @@
 			job *item;
 			if (my_job_list->next == NULL){
 				printf("Error: job list is empty\n");
-				return;
+				continue;
 			}
 			if (args[1] == NULL){
 				item = get_item_bypos(my_job_list, 1);
