@@ -14,6 +14,7 @@
  **/
 
  #include "job_control.h"   /* Remember to compile with module job_control.c */
+ #include <fcntl.h>
 
  #define MAX_LINE 256 /* 256 chars per line, per command, should be enough */
 
@@ -71,6 +72,9 @@
 		printf("COMMAND->");
 		fflush(stdout);
 		get_command(inputBuffer, MAX_LINE, args, &background);  /* Get next command */
+
+		char *file_in, *file_out;
+		parse_redirections(args, &file_in, &file_out);
 		 
 		if(args[0]==NULL) continue;   /* Do nothing if empty command */
 
@@ -112,7 +116,7 @@
 			kill(item->pgid, SIGCONT);
 			item->state = BACKGROUND;
 		}
-		else if (!strcmp(args[0], "fg")){
+		else if (!strcmp(args[0], "fg")){ 
 			job *item;
 			if (args[1] == NULL){
 				item = get_item_bypos(my_job_list, 1);
@@ -120,7 +124,29 @@
 				int number = atoi(args[1]);
 				item = get_item_bypos(my_job_list, number);
 			}
-			//Mandar killpg()
+			if (item == NULL) {
+    			printf("Error: no such job\n");
+    			continue;
+			}		
+			set_terminal(item->pgid);
+			killpg(item->pgid, SIGCONT);
+			item->state = FOREGROUND;
+			int pgid = item->pgid;
+			char* name = strdup(item->command);
+			delete_job(my_job_list, item);
+			pid_wait = waitpid(-pgid, &status, WUNTRACED);
+			set_terminal(getpid());
+			if (pid_wait > 0){
+				status_res = analyze_status(status, &info);
+				if (status_res == SUSPENDED){
+					add_job(my_job_list, new_job(pgid, name, STOPPED));
+				} 
+				printf("Foreground pid: %d, command: %s, %s, info: %d\n", pgid, name, status_strings[status_res], info);
+			}
+			else if (pid_wait == -1){
+				perror("Wait error");
+			}
+			free(name);
 		}
 		else {
 			pid_fork = fork();
@@ -155,6 +181,29 @@
 					set_terminal(getpid());
 				}
 				restore_terminal_signals();
+
+				// Redirection de entrada con SYSCALL open
+				if (file_in != NULL) {
+					int fd_in = open(file_in, O_RDONLY);
+					if (fd_in < 0) {
+						perror("Error opening input file");
+						exit(EXIT_FAILURE);
+					}
+					dup2(fd_in, STDIN_FILENO);
+					close(fd_in);
+				}
+
+				// Redirection de salida con fopen
+				if (file_out != NULL) {
+					FILE* fd_out = fopen(file_out, "w");
+					if (fd_out == NULL) {
+						perror("Error opening output file");
+						exit(EXIT_FAILURE);
+					}
+					dup2(fileno(fd_out), STDOUT_FILENO);
+					fclose(fd_out);
+				}
+
 				execvp(args[0], args);
 				printf("Error, command not found: %s", args[0]);
 				exit(EXIT_FAILURE);
@@ -163,7 +212,6 @@
 			}
 		}
 			
- 
 		 /** The steps are:
 		  *	 (1) Fork a child process using fork()
 		  *	 (2) The child process will invoke execvp()
